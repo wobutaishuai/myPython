@@ -87,6 +87,6 @@ class SocialLogin(object):
 
 if __name__ == "__main__":
     social = SocialLogin()
-    username = '140602198903271710'
-    password = 'artoria0327!'
+    username = '*********'
+    password = '********'
     social.post_param(username,password)
