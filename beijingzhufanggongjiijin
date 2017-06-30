@@ -1,0 +1,202 @@
+#!usr/bin/env python
+#-*- coding:utf-8 _*-
+"""
+@author: yanyongjun
+@file: seleniumgjjcx.py
+@time: 2017/06/20
+"""
+
+import sys
+from selenium import webdriver
+import time
+import os
+import mysqlUtil
+from pytesseractImg import getverify
+from selenium.webdriver.support.ui import WebDriverWait
+from PIL import Image
+from selenium.webdriver.common.keys import Keys
+import random
+import re
+from lxml import etree
+
+reload(sys)
+sys.setdefaultencoding('utf8')
+
+
+class soicalLogin():
+    def __init__(self):
+        self.login_url="http://www.bjgjj.gov.cn/wsyw/wscx/gjjcx-login.jsp#login_tab_2"
+        # self.proxyip=
+        self.chromedriver = "C:\Users\leihan\AppData\Local\Chromium\Application\chromedriver.exe"
+        os.environ["webdriver.chrome.driver"] = self.chromedriver
+        self.driver = webdriver.Chrome(executable_path=self.chromedriver)
+
+
+    def getimgtext(self):
+        # 保存验证图片
+        path = os.getcwd() + "picture/"
+        if os.path.exists(path):
+           pass
+        else:
+            os.mkdir(path)
+        t = str(int(time.time() * 1000))
+        img_name = path+'captcha' + t + '.jpg'
+        self.driver.get_screenshot_as_file(img_name)
+        location = self.driver.find_element_by_xpath(".//*[@id='login_tab_2']/div/div[3]/span[@id='sds']/img").location
+        size = self.driver.find_element_by_xpath(".//*[@id='login_tab_2']/div/div[3]/span[@id='sds']/img").size
+        left = location['x']
+        top = location['y']
+        right = location['x'] + size['width']
+        bottom = location['y'] + size['height']
+        a = Image.open(img_name)
+        im = a.crop((left, top, right, bottom))
+        im.save(img_name)
+        captcha = getverify(img_name, 2)
+        if captcha:
+            return captcha
+
+    def social_security_login(self,uesr_name,user_password):
+        try:
+            # 此处保留代理ip
+            # chome_options = webdriver.ChromeOptions()
+            # chome_options.add_argument(('--proxy-server=http://' + self.proxyip))
+
+            self.driver.get(self.login_url)
+            #最长等待时间为10秒
+            WebDriverWait( self.driver, 10).until(lambda the_driver: the_driver.find_element_by_xpath(".//div[@class='tabPanel']/ul/li[3]/a").is_displayed())
+            type = self.driver.find_element_by_xpath(".//div[@class='tabPanel']/ul/li[3]/a")
+            type.click()
+            time.sleep(1)
+            name = self.driver.find_element_by_id("bh1")
+            name.clear()
+            name.send_keys(uesr_name)
+            password = self.driver.find_element_by_id("mm1")
+            password.clear()
+            password.send_keys(user_password)
+            #截屏并获取验证码
+            captcha = self.getimgtext()
+            #等待0.5秒   等待识别结果
+            time.sleep(1)
+            identifying = self.driver.find_element_by_name("gjjcxjjmyhpppp1")
+            identifying.clear()
+            identifying.send_keys(captcha)
+            button = self.driver.find_element_by_xpath(".//*[@id='login_tab_2']/div/div[4]/input[1]")
+            time.sleep(2)
+            button.click()
+            WebDriverWait(self.driver, 10).until(lambda the_driver: the_driver.find_element_by_xpath(".//*[@id='new-mytable']/tbody/tr[1]/th[2]/div").is_displayed)
+            if self.driver.current_url == 'http://www.bjgjj.gov.cn/wsyw/wscx/gjjcx-choice.jsp':
+                # cookie = self.driver.get_cookies()
+                # pagehtml=self.driver.page_source.content
+                # return cookie,pagehtml
+                pendata = self.driver.find_element_by_css_selector("tr:last-child>td.style21>div>a")
+                pendata.click()
+                handles = self.driver.window_handles
+                self.driver.switch_to.window(handles[1])
+                content=self.driver.page_source
+                get_user_info(content)
+                time.sleep(3)
+                cookie = self.driver.get_cookies()
+                return cookie
+        except Exception as e:
+            self.driver.switch_to_alert().accept()
+            self.driver.refresh()
+
+
+def get_user_info(content):
+    patern = r"\d+.\d+"
+    htmletree = etree.HTML(content, parser=etree.HTMLParser(encoding='utf-8'))
+    real_names = htmletree.xpath(".//*[@id='t1Contents']/div[2]/table/tbody/tr[1]/td[2]/text()")
+    if real_names:
+        real_name = real_names[0].strip()
+    else:
+        real_name = ""
+    id_cards = htmletree.xpath(".//*[@id='t1Contents']/div[2]/table/tbody/tr[2]/td[4]/text()")
+    if id_cards:
+        id_card = id_cards[0].strip()
+    else:
+        id_card = ""
+    fund_codes = htmletree.xpath(".//*[@id='t1Contents']/div[2]/table/tbody/tr[1]/td[4]/text()")
+    if fund_codes:
+        fund_code = fund_codes[0].strip()
+    else:
+        fund_code = ""
+    fund_city = "北京"
+    fund_statuses = htmletree.xpath(".//*[@id='t1Contents']/div[2]/table/tbody/tr[5]/td[4]/text()")
+    if fund_statuses:
+        fund_status = fund_statuses[0].strip()
+    else:
+        fund_status = ""
+    com_names = htmletree.xpath(".//*[@id='t1Contents']/div[2]/table/tbody/tr[3]/td[4]/text()")
+    if com_names:
+        com_name = com_names[0].strip()
+    else:
+        com_name = ""
+    com_codes = htmletree.xpath(".//*[@id='t1Contents']/div[2]/table/tbody/tr[3]/td[2]/text()")
+    if com_codes:
+        com_code = com_codes[0].strip()
+    else:
+        com_code = ""
+    balances = htmletree.xpath(".//*[@id='t1Contents']/div[2]/table/tbody/tr[5]/td[2]/div/text()")
+    if balances:
+        balance = re.search(patern, balances[0]).group()
+    else:
+        balance = ""
+    remitted_dates = htmletree.xpath(".//*[@id='t1Contents']/div[2]/table/tbody/tr[7]/td[4]/text()")
+    if remitted_dates:
+        remitted_date = re.search(patern, remitted_dates[0].strip()).group()
+    else:
+        remitted_date = ""
+    roll_out_amounts = htmletree.xpath(".//*[@id='t1Contents']/div[2]/table/tbody/tr[6]/td[4]/div/text()")
+    if roll_out_amounts:
+        roll_out_amount = re.search(patern, roll_out_amounts[0].strip()).group()
+    else:
+        roll_out_amount = ""
+    extract_moneys = htmletree.xpath(".//*[@id='t1Contents']/div[2]/table/tbody/tr[6]/td[2]/div/text()")
+    if extract_moneys:
+        extract_money = re.search(patern, extract_moneys[0].strip()).group()
+    else:
+        extract_money = ""
+    now_moneys = htmletree.xpath(".//*[@id='t1Contents']/div[2]/table/tbody/tr[5]/td[2]/div/text()")
+    if now_moneys:
+        now_money = re.search(patern, now_moneys[0].strip()).group()
+    else:
+        now_money = ""
+    sql = "INSERT INTO housing_fund_user VALUES (NULL , %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+    param = (real_name, id_card, "", "", "", "", "", "", "", "", "", fund_code, fund_city, fund_status, "", "", com_name, com_code, balance, "", "", "", "", remitted_date, roll_out_amount, extract_money, now_money, "")
+    mysqlUtil.insert_database(sql, param)
+    end_datelist = htmletree.xpath('.//*[@id="tab-style"]/tbody/tr/td[1]/text()')
+    pay_datelist = htmletree.xpath('.//*[@id="tab-style"]/tbody/tr/td[2]/text()')
+    pay_typelist = htmletree.xpath('.//*[@id="tab-style"]/tbody/tr/td[3]/text()')
+    add_rmblist = htmletree.xpath('.//*[@id="tab-style"]/tbody/tr/td[4]/text()')
+    reduce_rmblist = htmletree.xpath('.//*[@id="tab-style"]/tbody/tr/td[5]/text()')
+    balance_rmblist = htmletree.xpath('.//*[@id="tab-style"]/tbody/tr/td[6]/text()')
+    flow_type = '6'
+    paramlist = []
+    for i in range(len(end_datelist)):
+        param = (id_card, pay_datelist[i].strip(), "", end_datelist[i].strip(), "", "", "", balance_rmblist[i].strip(), reduce_rmblist[i].strip(), add_rmblist[i].strip(), com_name, pay_typelist[i].strip(), flow_type)
+        paramlist.append(param)
+    if paramlist:
+        sql = "INSERT INTO housing_fund_payment VALUES (NULL , %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+        mysqlUtil.insert_many_database(sql, paramlist)
+
+
+if __name__ == '__main__':
+    soicalLogin = soicalLogin()
+    flag = True
+    count = 1
+    uesr_account = "********"
+    user_password = "********"
+    while flag:
+        if count < 4:
+            cookies = soicalLogin.social_security_login(uesr_account, user_password)
+            if cookies:
+                flag = False
+                soicalLogin.driver.quit()
+                sys.exit()
+
+            else:
+                count += 1
+        else:
+            flag = False
+            soicalLogin.driver.quit()
+            sys.exit()
